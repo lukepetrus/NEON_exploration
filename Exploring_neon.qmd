@@ -1,0 +1,17 @@
+---
+title: "Exploring NEON Data"
+format: markdown_github
+editor: visual
+---
+
+## Finding Some Data
+
+```{r Libraries}
+
+#renv::restore()
+
+library(tidyverse)
+library(neonUtilities)
+```
+
+The first step in any data analysis project is finding some data. For this project, I am going to check out NEON data, probably for their Yellowstone station.
