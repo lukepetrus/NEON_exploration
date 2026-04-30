@@ -26,11 +26,11 @@ I decided to start by just downloading some data through their data portal and h
 # Loads in what might be january's csv
 jan_csv <- read_csv("./data/NEON_conc-h2o-soil-salinity/NEON.D12.YELL.DP1.00094.001.2024-01.basic.20250129T000730Z.RELEASE-2026/NEON.D12.YELL.DP1.00094.001.001.501.001.SWS_1_minute.2024-01.basic.20240205T000223Z.csv")
 
-glimpse(first_csv)
+glimpse(jan_csv)
 
-min(first_csv$startDateTime)
-max(first_csv$startDateTime)
-max(first_csv$VSWCMean)
+min(jan_csv$startDateTime)
+max(jan_csv$startDateTime)
+max(jan_csv$VSWCMean)
 ```
 
 Well, January is not super helpful, which I suppose makes sense. All the water is frozen.
@@ -95,5 +95,63 @@ And now for the STAC query. . . .
 
 ```{r STAC}
 
+# Check the assets catalog for the name
+stac_catalog_query <- stac(
+  "https://planetarycomputer.microsoft.com/api/stac/v1"
+) %>% 
+  collections()
+
+stac_catalog <- get_request(stac_catalog_query)
+
+list_c(map(1:135, \(x) stac_catalog$collections[[x]]$id))
+
 # Form the query
+stac_query <- stac(
+  "https://planetarycomputer.microsoft.com/api/stac/v1"
+) %>% 
+  stac_search(
+    collections = "sentinel-1-rtc",
+    bbox = sensor_ext[c(1, 3, 2, 4)],
+    datetime = "2024-01-01/2024-12-31"
+  ) %>% 
+  post_request()
+
+# Function to build the cURL
+make_vsicurl_url <- function(base_url) {
+  paste0(
+    "/vsicurl", 
+    "?pc_url_signing=yes",
+    "&pc_collection=sentinel-1-rtc",
+    "&url=",
+    base_url
+  )
+}
+
+# Building the cURLs
+sentinel_urls <- make_vsicurl_url(assets_url(stac_query, "vv"))
+
+# Retrieves just the portion of the data that falls in my bounding box
+map(sentinel_urls, ~sf::gdal_utils(
+  "warp",
+  source = .x,
+  destination = paste0("./data/sentinel_data/", str_extract(.x, "\\d{8}"), ".tif"),
+  options = c(
+    "-t_srs", crs(sensor_vect),
+    "-te", sensor_ext[c(1, 3, 2, 4)]
+  )
+))
 ```
+
+Now that we've got some data, lets see what it looks like.
+
+```{r Rasters}
+
+file_list <- list.files("./data/sentinel_data/", full.names = T)
+
+rast_list <- map(file_list, rast)
+
+plot(rast_list[[30]])
+terra::points(sensor_vect)
+```
+
+Okay, this will be difficult. The question is whether there is enough other data from the NEON site to filter out the vegetation and keep just the soil moisture backscatter. Probably not, but maybe. Maybe if I used LiDAR data. . . .
