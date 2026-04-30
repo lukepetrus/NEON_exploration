@@ -12,6 +12,88 @@ editor: visual
 
 library(tidyverse)
 library(neonUtilities)
+library(terra)
+library(leaflet)
+library(rstac)
 ```
 
 The first step in any data analysis project is finding some data. For this project, I am going to check out NEON data, probably for their Yellowstone station.
+
+I decided to start by just downloading some data through their data portal and having a look at it.
+
+```{r January}
+
+# Loads in what might be january's csv
+jan_csv <- read_csv("./data/NEON_conc-h2o-soil-salinity/NEON.D12.YELL.DP1.00094.001.2024-01.basic.20250129T000730Z.RELEASE-2026/NEON.D12.YELL.DP1.00094.001.001.501.001.SWS_1_minute.2024-01.basic.20240205T000223Z.csv")
+
+glimpse(first_csv)
+
+min(first_csv$startDateTime)
+max(first_csv$startDateTime)
+max(first_csv$VSWCMean)
+```
+
+Well, January is not super helpful, which I suppose makes sense. All the water is frozen.
+
+```{r July}
+
+# Loads in 
+july_csv <- read_csv("./data/NEON_conc-h2o-soil-salinity/NEON.D12.YELL.DP1.00094.001.2024-07.basic.20260123T000749Z.RELEASE-2026/NEON.D12.YELL.DP1.00094.001.004.501.001.SWS_1_minute.2024-07.basic.20240906T015521Z.csv")
+
+glimpse(july_csv)
+```
+
+Okay, this looks like much more usable data. I think 501 is the sensor number, because there appears to be 6 sensors at the YELL location, 501-506. We can get more data on this by checking the sensor position file.
+
+```{r Sensor Positions}
+
+# Load sensor Positions
+sensor_positions <- read_csv("./data/NEON_conc-h2o-soil-salinity/NEON.D12.YELL.DP1.00094.001.2024-07.basic.20260123T000749Z.RELEASE-2026/NEON.D12.YELL.DP1.00094.001.sensor_positions.20240906T015521Z.csv")
+
+glimpse(sensor_positions)
+
+# Filter for just the Water Content sensors
+water_sensor_pos <- sensor_positions %>% 
+  filter(str_detect(HOR.VER, "\\d{3}(?=.501)") == T)
+
+# Quick plot
+plot(water_sensor_pos$locationReferenceLongitude, water_sensor_pos$locationReferenceLatitude)
+
+# Plot with satellite imagery
+leaflet() %>% 
+  addProviderTiles("Esri.WorldImagery") %>% 
+  addMarkers(lng = water_sensor_pos$locationReferenceLongitude,
+             lat = water_sensor_pos$locationReferenceLatitude,
+             label = water_sensor_pos$HOR.VER)
+```
+
+Cool. This is useful. I have 4 sensors strung out in a line. I think I want to see what I can do with this data with some radar imagery. The trees make it a non-ideal soil moisture sensing situation, but let's see what we can do.
+
+Next step is to convert these to a spatial object from which I can pull an extent to feed into RSTAC for radar data.
+
+```{r ConvertSpat}
+
+# Turns df into a spatVector
+sensor_vect <- vect(water_sensor_pos, geom = c('locationReferenceLongitude', 
+                                               'locationReferenceLatitude'), 
+                    crs = 'epsg:4326', keepgeom = T, )
+
+#Test
+plot(sensor_vect, buffer = T, clip = F, box = F)
+text(sensor_vect, labels = 'HOR.VER', pos = 1)
+```
+
+Okey dokey, that worked. Now let's pull a spatExtent.
+
+```{r Extent}
+
+# Pulling an extent
+sensor_ext <- ext(sensor_vect)
+```
+
+And now for the STAC query. . . .
+
+```{r STAC}
+
+# Form the query
+```
